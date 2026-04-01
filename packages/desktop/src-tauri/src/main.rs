@@ -7,7 +7,6 @@ use base64::{engine::general_purpose, Engine as _};
 use remote_ssh::DesktopSshManagerState;
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -15,7 +14,6 @@ use std::{
 };
 use std::{
     net::TcpListener,
-    process::Command,
     sync::{
         atomic::{AtomicU64, Ordering},
         Mutex,
@@ -24,9 +22,7 @@ use std::{
 };
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 #[cfg(target_os = "macos")]
-use window_vibrancy::{
-    apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial,
-};
+use window_vibrancy::{apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial};
 
 /// Global counter for generating unique window labels.
 static WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -439,7 +435,7 @@ fn build_macos_menu<R: tauri::Runtime>(
 }
 
 #[tauri::command]
-fn desktop_clear_cache(app: tauri::AppHandle) -> Result<(), String> {
+fn desktop_clear_cache(_app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         let mut failures: Vec<String> = Vec::new();
@@ -471,7 +467,7 @@ fn desktop_clear_cache(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn desktop_open_path(path: String, app: Option<String>) -> Result<(), String> {
+fn desktop_open_path(path: String, _app: Option<String>) -> Result<(), String> {
     let trimmed = path.trim();
     if trimmed.is_empty() {
         return Err("Path is required".to_string());
@@ -538,13 +534,7 @@ fn run_open_command_chain(specs: &[OpenCommandSpec]) -> Result<(), String> {
 fn is_jetbrains_app_id(app_id: &str) -> bool {
     matches!(
         app_id,
-        "pycharm"
-            | "intellij"
-            | "webstorm"
-            | "phpstorm"
-            | "rider"
-            | "rustrover"
-            | "android-studio"
+        "pycharm" | "intellij" | "webstorm" | "phpstorm" | "rider" | "rustrover" | "android-studio"
     )
 }
 
@@ -733,9 +723,9 @@ fn desktop_filter_installed_apps(apps: Vec<String>) -> Result<Vec<String>, Strin
 
 #[tauri::command]
 fn desktop_get_installed_apps(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     apps: Vec<String>,
-    force: Option<bool>,
+    _force: Option<bool>,
 ) -> Result<InstalledAppsResponse, String> {
     #[cfg(target_os = "macos")]
     {
@@ -2411,7 +2401,10 @@ fn build_init_script(local_origin: &str) -> String {
     init_script
 }
 
-fn parse_theme_override(theme_mode: Option<&str>, theme_variant: Option<&str>) -> Option<tauri::Theme> {
+fn parse_theme_override(
+    theme_mode: Option<&str>,
+    theme_variant: Option<&str>,
+) -> Option<tauri::Theme> {
     match theme_mode.map(str::trim) {
         Some("system") => None,
         Some("dark") => Some(tauri::Theme::Dark),
@@ -2455,12 +2448,7 @@ fn read_desktop_theme_override() -> Option<tauri::Theme> {
 fn apply_macos_window_vibrancy(window: &tauri::WebviewWindow) {
     let _ = clear_vibrancy(window);
 
-    if let Err(error) = apply_vibrancy(
-        window,
-        NSVisualEffectMaterial::Sidebar,
-        None,
-        None,
-    ) {
+    if let Err(error) = apply_vibrancy(window, NSVisualEffectMaterial::Sidebar, None, None) {
         log::warn!("[desktop:vibrancy] Failed to apply macOS vibrancy: {error}");
     }
 }
@@ -2830,7 +2818,9 @@ fn activate_main_window(app: &tauri::AppHandle, url: &str, local_origin: &str) -
     }
 
     if let Some(window) = app.get_webview_window("main") {
-        window.navigate(parsed).map_err(|err| anyhow!(err.to_string()))?;
+        window
+            .navigate(parsed)
+            .map_err(|err| anyhow!(err.to_string()))?;
         let _ = window.set_focus();
         return Ok(());
     }
@@ -2926,6 +2916,9 @@ fn open_new_window(app: &tauri::AppHandle) {
 }
 
 fn main() {
+    #[cfg(target_os = "linux")]
+    std::env::set_var("GDK_BACKEND", "x11");
+
     let log_builder = tauri_plugin_log::Builder::default()
         .level(log::LevelFilter::Info)
         .clear_targets()
@@ -2963,10 +2956,10 @@ fn main() {
 
             #[cfg(not(target_os = "macos"))]
             {
-                tauri::menu::Menu::default(app)
+                tauri::menu::Menu::new(app)
             }
         })
-        .on_menu_event(|app, event| {
+        .on_menu_event(|_app, _event| {
             #[cfg(target_os = "macos")]
             {
                 let id = event.id().as_ref();
